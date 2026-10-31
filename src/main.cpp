@@ -1,12 +1,17 @@
+#include <chrono>
 #include <iostream>
 
 #include <SFML/Graphics.hpp>
+#include <SFML/Graphics/Shader.hpp>
 #include <SFML/OpenGL.hpp>
+#include <SFML/Window/Mouse.hpp>
+using namespace std::chrono;
 
 int main() {
+    auto start = steady_clock::now();
     // OpenGL settings we request for:
     sf::ContextSettings settings;
-    settings.depthBits = 24;   // 24-bit depth buffer
+    settings.depthBits = 24;     // 24-bit depth buffer
     settings.stencilBits = 8;  // 8-bit stencil buffer
     // Request OpenGL 2.1 for compatibility with both SFML/Graphics AND macOS:
     //  - SFML's Graphics module implementation relies on legacy fixed-function pipeline features
@@ -19,6 +24,7 @@ int main() {
     settings.majorVersion = 2;
     settings.minorVersion = 1;
     sf::RenderWindow window(sf::VideoMode({1280, 720}), "Shaders", sf::State::Windowed, settings);
+    
     // Query the settings we actually received (may be different):
     const auto& actualSettings = window.getSettings();
     std::cout << "OpenGL version " << actualSettings.majorVersion << "."
@@ -31,10 +37,13 @@ int main() {
     fullscreenTriangle[0].texCoords = {0, 0};
     fullscreenTriangle[1].texCoords = {2, 0};
     fullscreenTriangle[2].texCoords = {0, 2};
+
     // load vertex and fragment shaders:
     sf::Shader shader(std::filesystem::path{"main.vert"}, std::filesystem::path{"main.frag"});
     // TODO: eventually add another Shader here which uses the blur fragment shader,
+    sf::Shader postProcessShader(std::filesystem::path{"main.vert"}, std::filesystem::path{"blur.frag"});
     // also create a sf::RenderTexture...
+    sf::RenderTexture renderTexture({1280, 720});
     while (window.isOpen()) {
         while (auto e = window.pollEvent()) {
             if (e->is<sf::Event::Closed>()) {
@@ -43,8 +52,26 @@ int main() {
         }
         // TODO: set shader uniforms and eventually draw into
         // a RenderTexture first before postprocessing into the window target.
+        auto mousePosition = (sf::Vector2<float>) sf::Mouse::getPosition(window);
+        
+
+
         window.clear(sf::Color::Black);
-        window.draw(fullscreenTriangle, &shader);
+        auto end = std::chrono::steady_clock::now();
+        duration<float> diff = end - start;
+
+        shader.setUniform("myTime",diff.count());
+        shader.setUniform("myVar", 1.f);
+        shader.setUniform("myPositionX", mousePosition.x);
+        shader.setUniform("myPositionY", mousePosition.y);
+        std::cout<<mousePosition.x << " X position is \n";
+        std::cout<<mousePosition.y << " y position is \n";
+        renderTexture.clear();
+        renderTexture.draw(fullscreenTriangle, &shader);
+
+        postProcessShader.setUniform("texture", renderTexture.getTexture());
+
+        window.draw(fullscreenTriangle, &postProcessShader);
         window.display();
     }
     return 0;
